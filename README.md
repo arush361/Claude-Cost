@@ -1,5 +1,7 @@
 # Claude-Cost 🧾
 
+> **Runs 100% locally.** It reads your `~/.claude` logs on your own machine, serves the dashboard from a tiny local Python server, and never sends your data anywhere. No cloud, no telemetry, no API key.
+
 Ever wonder where all your Claude Code tokens *actually* go? Same.
 
 Claude-Cost is a local-first dashboard that reads your `~/.claude` session logs and turns them into cost estimates, pretty charts, a shareable "Claude Wrapped" card, and blunt advice on how to stop lighting money on fire.
@@ -37,6 +39,7 @@ Hit **↻ Refresh** in the top-right after some Claude Code activity to re-parse
 ![Usage](screenshots/usage.png)
 ![Insights](screenshots/insights.png)
 ![Overview](screenshots/overview.png)
+![Projects](screenshots/projects.png)
 
 ## About the numbers
 
