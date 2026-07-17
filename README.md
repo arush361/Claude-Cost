@@ -30,14 +30,13 @@ Hit **↻ Refresh** in the top-right after some Claude Code activity to re-parse
 
 - **✦ Wrapped** — your Spotify-Wrapped-but-for-tokens. Headline stats, fun analogies ("Claude wrote ~59 novels of text"), a GitHub-style activity calendar, and a **Records & superlatives** grid (priciest day, marathon session, biggest single message, model of choice...). Smash the **Download card** button to export it as a PNG and flex on your timeline.
 - **Overview** — spend, sessions, messages, tokens, daily trend, and a real weekday × hour activity heatmap.
-- **Cost** — cost over time, cost by model, cache hit rate, per-model breakdown.
-- **Sessions** — every session, searchable and sortable. Click one for a full turn-by-turn replay with per-turn cost and context-compaction markers.
+- **Usage** — cost + sessions in one place, with **filters**: pick a project and/or a timeframe (Last 7d / 30d / 90d or a custom date range) and every chart, the model breakdown, and the session list all update together. Filtering is done server-side so the numbers stay correct, not just the visible rows. Click any session for a full turn-by-turn replay with per-turn cost and context-compaction markers.
 - **Projects** — spend grouped by the actual working directory.
 - **Insights** — an efficiency grade plus ranked, quantified ways to cut cost (route Opus work to Sonnet, fix cache misses, trim bloated context...). Savings are labeled separately from "where to look" signals, because those two are not the same number.
 
+![Usage](screenshots/usage.png)
 ![Insights](screenshots/insights.png)
 ![Overview](screenshots/overview.png)
-![Cost](screenshots/cost.png)
 
 ## About the numbers
 

@@ -55,8 +55,7 @@ function renderAll(s) {
   document.getElementById("generated").textContent = "updated " + dateLabel(s.generated_at);
   renderWrapped(s);
   renderOverview(s);
-  renderCost(s);
-  renderSessions(s);
+  renderUsage();
   renderProjects(s);
   renderInsights(s);
 }
@@ -182,114 +181,155 @@ function renderHeatmap(s) {
   document.getElementById("heatmap").innerHTML = html;
 }
 
-/* ---------- COST ---------- */
-function renderCost(s) {
-  const t = s.totals;
-  const el = document.getElementById("cost");
-  const cacheBase = t.cache_read_tokens + t.cache_write_tokens + t.input_tokens;
-  const hit = cacheBase ? t.cache_read_tokens / cacheBase : 0;
+/* ---------- USAGE (Cost + Sessions, filterable) ---------- */
+const USAGE = { project: "", preset: "all", from: "", to: "", search: "", data: null };
+let sessionSort = { key: "last_ts", dir: -1 };
+const sTh = (k, label, n) => `<th data-key="${k}" class="${n ? "num" : ""}">${label}</th>`;
+
+const ymdLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayLocal = () => ymdLocal(new Date());
+function daysAgoLocal(n) { const d = new Date(); d.setDate(d.getDate() - n); return ymdLocal(d); }
+
+function renderUsage() {
+  const el = document.getElementById("usage");
   el.innerHTML = `
-    <div class="cards">
-      ${card("Total cost", usd(t.cost), "estimated")}
-      ${card("Cache hit rate", (hit * 100).toFixed(0) + "%", "reads ÷ input+cache")}
-      ${card("Cache-write 1h", tok(t.cache_write_1h_tokens), "billed at 2×")}
-      ${card("Avg $/session", usd(t.cost / (t.sessions || 1)), "")}
+    <div class="filters">
+      <label class="fl">Project
+        <select id="u-project"><option value="">All projects</option></select>
+      </label>
+      <div class="presets" id="u-presets">
+        ${["all", "7d", "30d", "90d"].map((p) => `<button data-preset="${p}">${p === "all" ? "All time" : "Last " + p}</button>`).join("")}
+      </div>
+      <label class="fl">From <input type="date" id="u-from"></label>
+      <label class="fl">To <input type="date" id="u-to"></label>
+      <button id="u-clear" class="u-clear">Clear</button>
     </div>
+    <div id="u-cards" class="cards"></div>
     <div class="panel">
       <h2>Cost over time <span class="hint">daily, local</span></h2>
-      <div class="chart-wrap tall"><canvas id="co-daily"></canvas></div>
+      <div class="chart-wrap tall"><canvas id="u-daily"></canvas></div>
     </div>
     <div class="grid-2">
-      <div class="panel">
-        <h2>Cost by model</h2>
-        <div class="chart-wrap"><canvas id="co-model"></canvas></div>
-      </div>
-      <div class="panel">
-        <h2>Model detail</h2>
-        <div class="scroll" style="max-height:300px">${modelTable(s)}</div>
-      </div>
+      <div class="panel"><h2>Cost by model</h2><div class="chart-wrap"><canvas id="u-model"></canvas></div></div>
+      <div class="panel"><h2>Model detail</h2><div class="scroll" style="max-height:300px" id="u-model-table"></div></div>
+    </div>
+    <div class="panel">
+      <h2>Sessions <span class="hint" id="u-sess-count"></span></h2>
+      <div class="controls"><input type="search" id="u-search" placeholder="Filter shown sessions by project or id…"></div>
+      <div class="scroll"><table>
+        <thead><tr>
+          ${sTh("project", "Project")}${sTh("last_ts", "Last active", true)}${sTh("assistant_messages", "Msgs", true)}${sTh("cost", "Cost", true)}${sTh("total_tokens", "Tokens", true)}
+        </tr></thead>
+        <tbody id="u-sess-body"></tbody>
+      </table></div>
     </div>`;
 
-  const days = Object.keys(s.by_day);
-  lineChart("co-daily", days, [
-    { label: "Cost", data: days.map((d) => s.by_day[d].cost), color: "#d97757", fill: true },
-  ], { yFmt: usd });
-
-  const models = Object.keys(s.by_model);
-  doughnut("co-model", models, models.map((m) => s.by_model[m].cost),
-    models.map((m, i) => modelColor(m, i)), usd);
-}
-
-function modelTable(s) {
-  const rows = Object.entries(s.by_model).map(([m, v]) => `
-    <tr>
-      <td><span class="swatch" style="background:${modelColor(m, 0)}"></span> ${esc(m)}</td>
-      <td class="num">${usd(v.cost)}</td>
-      <td class="num">${num(v.messages)}</td>
-      <td class="num">${tok(v.input_tokens)}</td>
-      <td class="num">${tok(v.output_tokens)}</td>
-      <td class="num">${tok(v.cache_read_tokens)}</td>
-    </tr>`).join("");
-  return `<table><thead><tr><th>Model</th><th class="num">Cost</th><th class="num">Msgs</th><th class="num">In</th><th class="num">Out</th><th class="num">Cache rd</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-/* ---------- SESSIONS ---------- */
-let sessionSort = { key: "last_ts", dir: -1 };
-function renderSessions(s) {
-  const el = document.getElementById("sessions");
-  el.innerHTML = `
-    <div class="controls">
-      <input type="search" id="sess-search" placeholder="Filter by project or session id…" />
-      <span class="muted" id="sess-count"></span>
-    </div>
-    <div class="scroll"><table id="sess-table">
-      <thead><tr>
-        ${sTh("project", "Project")}
-        ${sTh("last_ts", "Last active", true)}
-        ${sTh("assistant_messages", "Msgs", true)}
-        ${sTh("compactions", "Compact", true)}
-        ${sTh("cost", "Cost", true)}
-        ${sTh("total_tokens", "Tokens", true)}
-      </tr></thead>
-      <tbody id="sess-body"></tbody>
-    </table></div>`;
-  const search = document.getElementById("sess-search");
-  search.oninput = () => drawSessions(s);
+  document.getElementById("u-presets").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      USAGE.preset = b.dataset.preset;
+      if (USAGE.preset === "all") { USAGE.from = ""; USAGE.to = ""; }
+      else { USAGE.to = todayLocal(); USAGE.from = daysAgoLocal(USAGE.preset === "7d" ? 6 : USAGE.preset === "30d" ? 29 : 89); }
+      loadUsage();
+    };
+  });
+  const fromEl = document.getElementById("u-from"), toEl = document.getElementById("u-to");
+  fromEl.onchange = () => { USAGE.from = fromEl.value; USAGE.preset = "custom"; loadUsage(); };
+  toEl.onchange = () => { USAGE.to = toEl.value; USAGE.preset = "custom"; loadUsage(); };
+  document.getElementById("u-clear").onclick = () => { Object.assign(USAGE, { project: "", preset: "all", from: "", to: "", search: "" }); loadUsage(); };
+  document.getElementById("u-search").oninput = (e) => { USAGE.search = e.target.value; drawUsageSessions(); };
+  document.getElementById("u-project").onchange = (e) => { USAGE.project = e.target.value; loadUsage(); };
   el.querySelectorAll("th[data-key]").forEach((th) => {
     th.onclick = () => {
       const k = th.dataset.key;
       sessionSort.dir = sessionSort.key === k ? -sessionSort.dir : -1;
       sessionSort.key = k;
-      drawSessions(s);
+      drawUsageSessions();
     };
   });
-  drawSessions(s);
+  loadUsage();
 }
-const sTh = (k, label, n) => `<th data-key="${k}" class="${n ? "num" : ""}">${label}</th>`;
 
-function drawSessions(s) {
-  const q = (document.getElementById("sess-search").value || "").toLowerCase();
-  let rows = s.sessions.filter((r) =>
+async function loadUsage() {
+  document.getElementById("u-from").value = USAGE.from;
+  document.getElementById("u-to").value = USAGE.to;
+  document.getElementById("u-search").value = USAGE.search;
+  document.getElementById("u-presets").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.preset === USAGE.preset));
+  document.getElementById("u-cards").innerHTML = `<p class="muted" style="padding:8px 2px">Loading usage…</p>`;
+  const params = new URLSearchParams();
+  if (USAGE.project) params.set("project", USAGE.project);
+  if (USAGE.from) params.set("from", USAGE.from);
+  if (USAGE.to) params.set("to", USAGE.to);
+  let d;
+  try {
+    const res = await fetch("/api/usage?" + params.toString());
+    d = await res.json();
+    if (!res.ok) throw new Error(d.error || "load failed");
+  } catch (e) {
+    document.getElementById("u-cards").innerHTML = `<p style="color:var(--high)">${esc(e.message)}</p>`;
+    return;
+  }
+  USAGE.data = d;
+  const projSel = document.getElementById("u-project");
+  projSel.innerHTML = `<option value="">All projects</option>` +
+    d.projects.map((p) => `<option value="${esc(p.name)}">${esc(shortProj(p.name))} — ${usd(p.cost)}</option>`).join("");
+  projSel.value = USAGE.project;
+  renderUsageData();
+}
+
+function filterLabel() {
+  const p = USAGE.project ? shortProj(USAGE.project) : "all projects";
+  const r = (USAGE.from || USAGE.to) ? `${USAGE.from || "start"} → ${USAGE.to || "today"}` : "all time";
+  return `${p} · ${r}`;
+}
+
+function renderUsageData() {
+  const d = USAGE.data, t = d.totals;
+  const cacheBase = t.cache_read_tokens + t.cache_write_tokens + t.input_tokens;
+  const hit = cacheBase ? t.cache_read_tokens / cacheBase : 0;
+  document.getElementById("u-cards").innerHTML = `
+    ${card("Total cost", usd(t.cost), filterLabel())}
+    ${card("Sessions", num(t.sessions), num(t.messages) + " messages")}
+    ${card("Tokens", tok(t.total_tokens), "all buckets")}
+    ${card("Cache hit rate", (hit * 100).toFixed(0) + "%", "reads ÷ input+cache")}
+    ${card("Avg $/session", usd(t.cost / (t.sessions || 1)), "")}`;
+  const days = Object.keys(d.by_day);
+  lineChart("u-daily", days, [{ label: "Cost", data: days.map((x) => d.by_day[x].cost), color: "#d97757", fill: true }], { yFmt: usd });
+  const models = Object.keys(d.by_model);
+  doughnut("u-model", models, models.map((m) => d.by_model[m].cost), models.map((m, i) => modelColor(m, i)), usd);
+  document.getElementById("u-model-table").innerHTML = modelTableFrom(d.by_model);
+  drawUsageSessions();
+}
+
+function modelTableFrom(byModel) {
+  const rows = Object.entries(byModel).map(([m, v]) => `
+    <tr><td><span class="swatch" style="background:${modelColor(m, 0)}"></span> ${esc(m)}</td>
+    <td class="num">${usd(v.cost)}</td><td class="num">${num(v.messages)}</td>
+    <td class="num">${tok(v.input_tokens)}</td><td class="num">${tok(v.output_tokens)}</td>
+    <td class="num">${tok(v.cache_read_tokens)}</td></tr>`).join("");
+  return `<table><thead><tr><th>Model</th><th class="num">Cost</th><th class="num">Msgs</th><th class="num">In</th><th class="num">Out</th><th class="num">Cache rd</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function drawUsageSessions() {
+  if (!USAGE.data) return;
+  const q = (USAGE.search || "").toLowerCase();
+  const rows = USAGE.data.sessions.filter((r) =>
     !q || (r.project || "").toLowerCase().includes(q) || r.session_id.toLowerCase().includes(q));
   const { key, dir } = sessionSort;
   rows.sort((a, b) => {
-    let av = a[key], bv = b[key];
+    const av = a[key], bv = b[key];
     if (typeof av === "string") return dir * (av < bv ? -1 : av > bv ? 1 : 0);
     return dir * ((av || 0) - (bv || 0));
   });
-  document.getElementById("sess-count").textContent = `${rows.length} sessions`;
-  document.getElementById("sess-body").innerHTML = rows.map((r) => `
+  document.getElementById("u-sess-count").textContent = `${rows.length} shown`;
+  document.getElementById("u-sess-body").innerHTML = rows.map((r) => `
     <tr class="clickable" data-id="${esc(r.session_id)}">
       <td><div class="proj-name">${esc(shortProj(r.project))}</div><span class="mono muted">${esc(r.session_id.slice(0, 8))}</span></td>
       <td class="num">${dateLabel(r.last_ts)}</td>
       <td class="num">${num(r.assistant_messages)}</td>
-      <td class="num">${r.compactions ? '<span class="pill" style="color:var(--medium)">' + r.compactions + "</span>" : "—"}</td>
       <td class="num">${usd(r.cost)}</td>
       <td class="num">${tok(r.total_tokens)}</td>
     </tr>`).join("");
-  document.querySelectorAll("#sess-body tr").forEach((tr) => {
-    tr.onclick = () => openSession(tr.dataset.id);
-  });
+  document.querySelectorAll("#u-sess-body tr").forEach((tr) => { tr.onclick = () => openSession(tr.dataset.id); });
 }
 
 /* ---------- PROJECTS ---------- */

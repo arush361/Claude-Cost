@@ -12,7 +12,7 @@ import json
 import mimetypes
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import insights
 import parser
@@ -73,6 +73,19 @@ class Handler(BaseHTTPRequestHandler):
                 payload["wrapped"] = wrapped.build_wrapped(summary)
                 self._send(200, payload)
             except Exception as e:  # surface parse errors to the UI
+                self._send(500, {"error": str(e)})
+            return
+
+        if route == "/api/usage":
+            try:
+                q = parse_qs(urlparse(self.path).query)
+                view = parser.usage_view(
+                    project=(q.get("project", [""])[0] or None),
+                    date_from=(q.get("from", [""])[0] or None),
+                    date_to=(q.get("to", [""])[0] or None),
+                )
+                self._send(200, view)
+            except Exception as e:
                 self._send(500, {"error": str(e)})
             return
 

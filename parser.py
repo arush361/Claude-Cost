@@ -24,6 +24,7 @@ import pricing
 CLAUDE_PROJECTS = os.path.expanduser("~/.claude/projects")
 
 _CACHE = {"signature": None, "summary": None}
+_RECORDS = {"signature": None, "messages": None}
 
 
 def _session_files():
@@ -278,6 +279,161 @@ def build_summary(force=False):
     _CACHE["signature"] = sig
     _CACHE["summary"] = summary
     return summary
+
+
+def _build_records():
+    """Cached list of lightweight per-assistant-message records used for the
+    filterable Usage view. Deduped on message.id per file; cost via the same
+    pricing.cost_breakdown used everywhere else. Cached on file mtimes."""
+    files = _session_files()
+    sig = _signature(files)
+    if _RECORDS["signature"] == sig and _RECORDS["messages"] is not None:
+        return _RECORDS["messages"]
+
+    messages = []
+    for path in files:
+        sid = os.path.splitext(os.path.basename(path))[0]
+        seen = set()
+        cwd = None
+        try:
+            fh = open(path, "r", errors="replace")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if cwd is None and d.get("cwd"):
+                    cwd = d["cwd"]
+                if d.get("type") != "assistant":
+                    continue
+                m = d.get("message", {})
+                mid = m.get("id")
+                if mid and mid in seen:
+                    continue
+                if mid:
+                    seen.add(mid)
+                bd = pricing.cost_breakdown(m.get("model"), m.get("usage", {}) or {})
+                ts = _local_dt(d.get("timestamp"))
+                messages.append({
+                    "session_id": sid,
+                    "project": cwd or "(unknown)",
+                    "date": ts.strftime("%Y-%m-%d") if ts else None,
+                    "ts": ts.isoformat() if ts else None,
+                    "model": pricing.normalize_model(m.get("model")) or "(none)",
+                    "cost": bd["cost"],
+                    "input_tokens": bd["input_tokens"],
+                    "output_tokens": bd["output_tokens"],
+                    "cache_read_tokens": bd["cache_read_tokens"],
+                    "cache_write_tokens": bd["cache_write_tokens"],
+                    "cache_write_1h_tokens": bd["cache_write_1h_tokens"],
+                    "total_tokens": bd["total_tokens"],
+                })
+
+    _RECORDS["signature"] = sig
+    _RECORDS["messages"] = messages
+    return messages
+
+
+_USAGE_KEYS = ("cost", "input_tokens", "output_tokens", "cache_read_tokens",
+               "cache_write_tokens", "cache_write_1h_tokens", "total_tokens")
+
+
+def _usage_blank():
+    b = {k: 0 for k in _USAGE_KEYS}
+    b["cost"] = 0.0
+    b["messages"] = 0
+    return b
+
+
+def _usage_add(bucket, m):
+    bucket["messages"] += 1
+    for k in _USAGE_KEYS:
+        bucket[k] += m[k]
+
+
+def usage_view(project=None, date_from=None, date_to=None):
+    """Filtered aggregates for the Usage tab: totals, by_day, by_model, and a
+    per-session list, all restricted to the given project and [from, to] date
+    range (inclusive, local dates as YYYY-MM-DD)."""
+    messages = _build_records()
+
+    # project dropdown + date bounds are computed over the FULL dataset
+    all_projects = {}
+    min_date = max_date = None
+    for m in messages:
+        p = all_projects.setdefault(m["project"], 0.0)
+        all_projects[m["project"]] = p + m["cost"]
+        if m["date"]:
+            if min_date is None or m["date"] < min_date:
+                min_date = m["date"]
+            if max_date is None or m["date"] > max_date:
+                max_date = m["date"]
+    projects = [{"name": k, "cost": v} for k, v in
+                sorted(all_projects.items(), key=lambda kv: kv[1], reverse=True)]
+
+    def keep(m):
+        if project and m["project"] != project:
+            return False
+        if date_from or date_to:
+            if not m["date"]:
+                return False
+            if date_from and m["date"] < date_from:
+                return False
+            if date_to and m["date"] > date_to:
+                return False
+        return True
+
+    totals = _usage_blank()
+    by_day = {}
+    by_model = {}
+    sess = {}
+    for m in messages:
+        if not keep(m):
+            continue
+        _usage_add(totals, m)
+        if m["date"]:
+            _usage_add(by_day.setdefault(m["date"], _usage_blank()), m)
+        _usage_add(by_model.setdefault(m["model"], _usage_blank()), m)
+        s = sess.get(m["session_id"])
+        if s is None:
+            s = sess[m["session_id"]] = {
+                "session_id": m["session_id"], "project": m["project"],
+                "cwd": m["project"], "models": set(), "first_ts": None,
+                "last_ts": None, "assistant_messages": 0, **_usage_blank(),
+            }
+        _usage_add(s, m)
+        s["assistant_messages"] += 1
+        if m["model"]:
+            s["models"].add(m["model"])
+        if m["ts"]:
+            if s["first_ts"] is None or m["ts"] < s["first_ts"]:
+                s["first_ts"] = m["ts"]
+            if s["last_ts"] is None or m["ts"] > s["last_ts"]:
+                s["last_ts"] = m["ts"]
+
+    sessions = []
+    for s in sess.values():
+        s["models"] = sorted(s["models"])
+        s.pop("messages", None)
+        sessions.append(s)
+    sessions.sort(key=lambda s: s["last_ts"] or "", reverse=True)
+
+    return {
+        "totals": {**totals, "sessions": len(sessions)},
+        "by_day": dict(sorted(by_day.items())),
+        "by_model": {k: v for k, v in sorted(
+            by_model.items(), key=lambda kv: kv[1]["cost"], reverse=True)},
+        "sessions": sessions,
+        "projects": projects,
+        "bounds": {"min": min_date, "max": max_date},
+        "filter": {"project": project or "", "from": date_from or "", "to": date_to or ""},
+    }
 
 
 def session_detail(session_id):

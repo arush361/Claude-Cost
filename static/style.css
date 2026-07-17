@@ -285,3 +285,17 @@ nav#tabs button[data-tab="wrapped"].active {
 .insight .impact { margin: 0; align-self: center; flex: 0 0 auto; text-align: right; max-width: 240px; color: var(--muted); font-size: 13px; font-weight: 500; }
 .insight .impact.big { font-size: 15px; font-weight: 750; color: var(--good); background: rgba(78,201,165,.1); border: 1px solid rgba(78,201,165,.28); padding: 9px 13px; border-radius: 10px; }
 @media (max-width: 720px) { .insight { flex-wrap: wrap; } .insight .impact { max-width: none; text-align: left; align-self: flex-start; } }
+
+/* ============================================================
+   Usage tab filter bar
+   ============================================================ */
+.filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 22px; }
+.filters .fl { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.filters select, .filters input[type=date] { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+.filters select { max-width: 320px; }
+.filters .presets { display: inline-flex; gap: 4px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px; }
+.filters .presets button { background: transparent; border: none; color: var(--muted); padding: 6px 11px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+.filters .presets button:hover { color: var(--text); }
+.filters .presets button.on { background: var(--accent); color: #1a1109; font-weight: 700; }
+.filters .u-clear { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 12px; margin-left: auto; align-self: center; }
+.filters .u-clear:hover { color: var(--text); border-color: var(--accent); }
