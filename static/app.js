@@ -507,7 +507,24 @@ async function exportCard() {
   const old = btn.textContent;
   btn.textContent = "Rendering…";
   try {
-    const canvas = await html2canvas(node, { backgroundColor: "#10141b", scale: 2 });
+    const canvas = await html2canvas(node, {
+      backgroundColor: "#10141b",
+      scale: 2,
+      // html2canvas can't render `background-clip: text` (the gradient fills the
+      // whole box instead of the glyphs), so force the gradient numbers to solid
+      // colors in the cloned DOM only — the live page keeps its gradient.
+      onclone: (doc) => {
+        doc.querySelectorAll("#wrap-card .wrap-big .n").forEach((el) => {
+          const c = el.classList.contains("accent") ? "#f0a887"
+            : el.classList.contains("blue") ? "#6ea8fe" : "#ffffff";
+          el.style.background = "none";
+          el.style.webkitBackgroundClip = "border-box";
+          el.style.backgroundClip = "border-box";
+          el.style.webkitTextFillColor = c;
+          el.style.color = c;
+        });
+      },
+    });
     const a = document.createElement("a");
     a.download = "claude-wrapped.png";
     a.href = canvas.toDataURL("image/png");
