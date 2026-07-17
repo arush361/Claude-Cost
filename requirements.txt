@@ -1,0 +1,2 @@
+# No third-party dependencies — the dashboard runs on the Python standard
+# library only (Python 3.9+). Nothing to install.

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude Usage Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Claude Usage</h1>
+    </div>
+    <nav id="tabs">
+      <button data-tab="wrapped" class="active">✦ Wrapped</button>
+      <button data-tab="overview">Overview</button>
+      <button data-tab="cost">Cost</button>
+      <button data-tab="sessions">Sessions</button>
+      <button data-tab="projects">Projects</button>
+      <button data-tab="insights">Insights</button>
+    </nav>
+    <div class="meta">
+      <button id="refresh-btn" class="refresh-btn" title="Re-parse ~/.claude and reload">↻ Refresh</button>
+      <span id="generated"></span>
+    </div>
+  </header>
+
+  <main>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Parsing <code>~/.claude/projects</code>…<br><small>first load walks all sessions; this can take a moment</small></p>
+    </div>
+
+    <section id="wrapped" class="tab"></section>
+    <section id="overview" class="tab hidden"></section>
+    <section id="cost" class="tab hidden"></section>
+    <section id="sessions" class="tab hidden"></section>
+    <section id="projects" class="tab hidden"></section>
+    <section id="insights" class="tab hidden"></section>
+  </main>
+
+  <!-- session detail drawer -->
+  <div id="drawer" class="drawer hidden">
+    <div class="drawer-body">
+      <button id="drawer-close" class="drawer-close">&times;</button>
+      <div id="drawer-content"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
