@@ -33,10 +33,12 @@ Hit **↻ Refresh** in the top-right after some Claude Code activity to re-parse
 - **✦ Wrapped** — your Spotify-Wrapped-but-for-tokens. Headline stats, fun analogies ("Claude wrote ~59 novels of text"), a GitHub-style activity calendar, and a **Records & superlatives** grid (priciest day, marathon session, biggest single message, model of choice...). Smash the **Download card** button to export it as a PNG and flex on your timeline.
 - **Overview** — spend, sessions, messages, tokens, daily trend, and a real weekday × hour activity heatmap.
 - **Usage** — cost + sessions in one place, with **filters**: pick a project and/or a timeframe (Last 7d / 30d / 90d or a custom date range) and every chart, the model breakdown, and the session list all update together. Filtering is done server-side so the numbers stay correct, not just the visible rows. Click any session for a full turn-by-turn replay with per-turn cost and context-compaction markers.
+- **Activity** — where your tokens actually go: most-used tools, a **file hotspots** table, skills, and subagents, plus an *approximate* "context injected" meter (how many bytes each tool fed back into the conversation — a proxy for tokens, honestly labeled, not a fake per-tool bill).
 - **Projects** — spend grouped by the actual working directory.
 - **Insights** — an efficiency grade plus ranked, quantified ways to cut cost (route Opus work to Sonnet, fix cache misses, trim bloated context...). Savings are labeled separately from "where to look" signals, because those two are not the same number.
 
 ![Usage](screenshots/usage.png)
+![Activity](screenshots/activity.png)
 ![Insights](screenshots/insights.png)
 ![Overview](screenshots/overview.png)
 ![Projects](screenshots/projects.png)
@@ -49,7 +51,15 @@ Costs are **estimates** from the token counts in each message's `usage`, priced 
 - **Disjoint token buckets**, each priced at its own rate: input ×1.0, output ×1.0, cache read ×0.10, cache write 5m ×1.25, cache write 1h ×2.0.
 - **Local time** for daily/hourly buckets (logs are UTC). **Sonnet 5** priced at standard $3/$15. `<synthetic>` and unknown models don't get silently priced at $0.
 
-Want to tweak rates or add a model? It's all in `pricing.py`.
+Want to tweak rates or add a model? It's all in `pricing.py`. Because the warehouse stores raw token buckets (never a frozen dollar figure), editing a rate re-prices *all* your history the next time you load — even sessions whose logs are long gone.
+
+## History that outlives the logs
+
+Claude Code prunes its own `~/.claude` session logs after about 30 days. Claude-Cost keeps a tiny local **warehouse** at `~/.claude-cost/history.db` (a SQLite file) so your spend history sticks around after the raw logs disappear.
+
+- **Persistent** — each message is ingested once, keyed on its stable id. When a log file gets pruned, its rows stay in the warehouse. Your all-time totals don't quietly shrink.
+- **Incremental** — only session files whose size/mtime changed get re-parsed, so after the first run the dashboard loads in a fraction of a second (a fresh process warm-starts in ~0.5s) instead of re-reading hundreds of MB every time.
+- **Yours** — it lives outside the repo and never leaves your machine. Point it elsewhere with `--db /path/to.db` or `$CLAUDE_COST_DB`, or just delete it to rebuild from whatever logs still exist.
 
 ## The fine print
 

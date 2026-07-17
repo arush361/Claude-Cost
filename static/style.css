@@ -94,6 +94,8 @@ tbody tr:hover { background: var(--panel-2); }
 tr.clickable { cursor: pointer; }
 .proj-name { max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted { color: var(--muted); }
+.small { font-size: 12px; }
+p.muted.small { margin: 10px 2px 0; line-height: 1.5; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); margin-right: 4px; }

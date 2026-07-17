@@ -75,15 +75,34 @@ def _cache_write_split(usage):
 
 
 def cost_breakdown(model, usage):
-    """Return a dict with per-bucket cost + tokens for one message's usage.
+    """Return a dict with per-bucket cost + tokens for one message's `usage`.
 
-    `priced` is False for synthetic/unknown models (cost contributions are 0 so
-    they never silently inflate totals, but token counts are still reported).
+    Thin wrapper: extracts the five disjoint token buckets from the raw usage
+    object and delegates the arithmetic to cost_from_buckets so the live parse
+    and the persisted-warehouse path price identically.
     """
     inp = usage.get("input_tokens", 0) or 0
     out = usage.get("output_tokens", 0) or 0
     cread = usage.get("cache_read_input_tokens", 0) or 0
     w5m, w1h = _cache_write_split(usage)
+    return cost_from_buckets(model, inp, out, cread, w5m, w1h)
+
+
+def cost_from_buckets(model, inp, out, cread, w5m, w1h):
+    """Price one message from its already-split token buckets.
+
+    This is the single source of truth for cost math. The warehouse stores raw
+    buckets (never cost) and calls this at read time, so edits to PRICES re-price
+    all history — including rows whose source logs Claude has since pruned.
+
+    `priced` is False for synthetic/unknown models (cost contributions are 0 so
+    they never silently inflate totals, but token counts are still reported).
+    """
+    inp = inp or 0
+    out = out or 0
+    cread = cread or 0
+    w5m = w5m or 0
+    w1h = w1h or 0
 
     norm = normalize_model(model)
     priced = norm in PRICES and not is_synthetic(model)

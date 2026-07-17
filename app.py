@@ -14,6 +14,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+import history
 import insights
 import parser
 import wrapped
@@ -89,6 +90,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, {"error": str(e)})
             return
 
+        if route == "/api/tools":
+            try:
+                parser.build_summary()  # ensures the warehouse is synced
+                self._send(200, history.get_attribution())
+            except Exception as e:
+                self._send(500, {"error": str(e)})
+            return
+
         if route.startswith("/api/session/"):
             sid = unquote(route[len("/api/session/"):])
             detail = parser.session_detail(sid)
@@ -105,7 +114,12 @@ def main():
     ap = argparse.ArgumentParser(description="Claude usage dashboard")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=5000)
+    ap.add_argument("--db", default=None,
+                    help="warehouse DB path (default ~/.claude-cost/history.db "
+                         "or $CLAUDE_COST_DB)")
     args = ap.parse_args()
+    if args.db:
+        history.set_db_path(args.db)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Claude usage dashboard -> http://{args.host}:{args.port}  (Ctrl+C to stop)")
     try:

@@ -28,6 +28,13 @@ const tok = (n) => {
   return String(Math.round(n));
 };
 const num = (n) => Math.round(n || 0).toLocaleString();
+const bytes = (n) => {
+  n = n || 0;
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
+  if (n >= 1e3) return (n / 1e3).toFixed(0) + " KB";
+  return n + " B";
+};
 const esc = (s) => (s == null ? "" : String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
 const dateLabel = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 const shortProj = (p) => (p || "").replace(/^\/Users\/[^/]+\//, "~/") || "(unknown)";
@@ -56,6 +63,7 @@ function renderAll(s) {
   renderWrapped(s);
   renderOverview(s);
   renderUsage();
+  renderActivity();
   renderProjects(s);
   renderInsights(s);
 }
@@ -71,6 +79,7 @@ async function refresh() {
     const res = await fetch("/api/summary?refresh=1");
     if (!res.ok) throw new Error("HTTP " + res.status);
     STATE.summary = await res.json();
+    ACTIVITY.data = null;  // force the Activity tab to re-fetch
     renderAll(STATE.summary);
   } catch (e) {
     btn.textContent = "↻ Failed";
@@ -330,6 +339,89 @@ function drawUsageSessions() {
       <td class="num">${tok(r.total_tokens)}</td>
     </tr>`).join("");
   document.querySelectorAll("#u-sess-body tr").forEach((tr) => { tr.onclick = () => openSession(tr.dataset.id); });
+}
+
+/* ---------- ACTIVITY (tool / file / skill / subagent attribution) ---------- */
+const ACTIVITY = { data: null };
+
+async function renderActivity() {
+  const el = document.getElementById("activity");
+  if (!ACTIVITY.data) {
+    el.innerHTML = `<p class="muted" style="padding:12px 2px">Loading activity…</p>`;
+    try {
+      const res = await fetch("/api/tools");
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "load failed");
+      ACTIVITY.data = d;
+    } catch (e) {
+      el.innerHTML = `<p style="color:var(--high)">${esc(e.message)}</p>`;
+      return;
+    }
+  }
+  drawActivity(ACTIVITY.data);
+}
+
+function drawActivity(d) {
+  const el = document.getElementById("activity");
+  const tools = d.tool || [], files = d.file || [], skills = d.skill || [], subs = d.subagent || [];
+  const totalCalls = tools.reduce((a, t) => a + t.calls, 0);
+  const totalBytes = tools.reduce((a, t) => a + t.result_bytes, 0);
+
+  el.innerHTML = `
+    <div class="cards">
+      ${card("Tool calls", num(totalCalls), tools.length + " distinct tools")}
+      ${card("Files touched", num(files.length), "read / edit / write")}
+      ${card("Context injected", bytes(totalBytes), "≈ tool output fed back")}
+      ${card("Skills / subagents", num(skills.length) + " / " + num(subs.length), "invocations tracked")}
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Most-used tools <span class="hint">by call count</span></h2>
+        <div class="chart-wrap tall"><canvas id="ac-tools"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2>Context injected back <span class="hint">approx · tool_result bytes</span></h2>
+        <div class="chart-wrap tall"><canvas id="ac-bytes"></canvas></div>
+        <p class="muted small">A proxy for the tokens each tool pushed into context, not an isolated cost — token usage is billed per message, not per tool.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>File hotspots <span class="hint">files touched most, with output fed back</span></h2>
+      <div class="scroll" style="max-height:340px"><table>
+        <thead><tr><th>File</th><th class="num">Touches</th><th class="num">≈ Context</th></tr></thead>
+        <tbody>${files.slice(0, 40).map((f) => `
+          <tr><td><div class="proj-name" title="${esc(f.key)}">${esc(shortProj(f.key))}</div></td>
+          <td class="num">${num(f.calls)}</td><td class="num">${bytes(f.result_bytes)}</td></tr>`).join("")
+        || `<tr><td colspan="3" class="muted">No file activity recorded.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Skills <span class="hint">invocations</span></h2>
+        <div class="scroll" style="max-height:260px"><table>
+          <thead><tr><th>Skill</th><th class="num">Uses</th></tr></thead>
+          <tbody>${skills.map((s) => `<tr><td>${esc(s.key)}</td><td class="num">${num(s.calls)}</td></tr>`).join("")
+          || `<tr><td colspan="2" class="muted">No skills invoked.</td></tr>`}</tbody>
+        </table></div>
+      </div>
+      <div class="panel">
+        <h2>Subagents <span class="hint">Agent / Task by type</span></h2>
+        <div class="scroll" style="max-height:260px"><table>
+          <thead><tr><th>Subagent</th><th class="num">Spawns</th></tr></thead>
+          <tbody>${subs.map((s) => `<tr><td>${esc(s.key)}</td><td class="num">${num(s.calls)}</td></tr>`).join("")
+          || `<tr><td colspan="2" class="muted">No subagents spawned.</td></tr>`}</tbody>
+        </table></div>
+      </div>
+    </div>`;
+
+  const topTools = tools.slice(0, 15);
+  barChart("ac-tools", topTools.map((t) => t.key), [{ label: "Calls", data: topTools.map((t) => t.calls), color: "#6ea8fe" }], { horizontal: true });
+
+  const topBytes = [...tools].sort((a, b) => b.result_bytes - a.result_bytes).slice(0, 15);
+  barChart("ac-bytes", topBytes.map((t) => t.key), [{ label: "Bytes", data: topBytes.map((t) => t.result_bytes), color: "#d97757" }], { horizontal: true, yFmt: bytes });
 }
 
 /* ---------- PROJECTS ---------- */
