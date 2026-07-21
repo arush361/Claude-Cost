@@ -291,7 +291,7 @@ def _per_message(messages):
         bd = pricing.cost_from_buckets(
             m["model"], m["input_tokens"], m["output_tokens"],
             m["cache_read_tokens"], m["cache_write_5m_tokens"],
-            m["cache_write_1h_tokens"],
+            m["cache_write_1h_tokens"], on_date=ts,
         )
         out.append((ts, m["model"], bd))
     return out
@@ -658,7 +658,7 @@ def _build_detail(path, session_id):
             bd = None
             if first_line_of_msg:
                 usage = msg.get("usage", {}) or {}
-                bd = pricing.cost_breakdown(model, usage)
+                bd = pricing.cost_breakdown(model, usage, on_date=ts)
                 _add(header, bd)
             if text.strip():
                 events.append({

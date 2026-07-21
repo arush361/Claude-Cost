@@ -249,11 +249,12 @@ def get_records():
 
     records = []
     for r in rows:
+        ts = r["ts"]
         bd = pricing.cost_from_buckets(
             r["model"], r["input_tokens"], r["output_tokens"],
             r["cache_read_tokens"], r["w5m"], r["w1h"],
+            on_date=(ts[:10] if ts else None),
         )
-        ts = r["ts"]
         records.append({
             "session_id": r["session_id"],
             "project": r["cwd"] or "(unknown)",
