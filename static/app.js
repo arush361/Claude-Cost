@@ -536,17 +536,11 @@ function renderWrapped(s) {
       <div class="cal-head">
         <h2>Your days in Claude <span class="hint">local time · through today</span></h2>
       </div>
-      <div class="cal-stats">${calStatsHTML(s)}</div>
-      <div class="cal-pair">
+      <div class="cal-layout">
+        <div class="cal-stats">${calStatsHTML(s)}</div>
         <div class="cal-col">
-          <div class="cal-col-h">Messages</div>
-          <div class="calendar-wrap">${calendarHTML(s, "messages")}</div>
-          <div class="cal-legend">less <span class="c"></span><span class="c" style="background:var(--heat-msg-1)"></span><span class="c" style="background:var(--heat-msg-2)"></span><span class="c" style="background:var(--heat-msg-3)"></span><span class="c" style="background:var(--heat-msg-4)"></span> more</div>
-        </div>
-        <div class="cal-col">
-          <div class="cal-col-h">Cost</div>
-          <div class="calendar-wrap">${calendarHTML(s, "cost")}</div>
-          <div class="cal-legend">less <span class="c"></span><span class="c" style="background:var(--heat-cost-1)"></span><span class="c" style="background:var(--heat-cost-2)"></span><span class="c" style="background:var(--heat-cost-3)"></span><span class="c" style="background:var(--heat-cost-4)"></span> more</div>
+          <div class="calendar-wrap">${calendarHTML(s)}</div>
+          <div class="cal-legend">less <span class="c"></span><span class="c" style="background:var(--heat-cost-1)"></span><span class="c" style="background:var(--heat-cost-2)"></span><span class="c" style="background:var(--heat-cost-3)"></span><span class="c" style="background:var(--heat-cost-4)"></span> more spend</div>
         </div>
       </div>
     </div>
@@ -576,7 +570,7 @@ function calStatsHTML(s) {
   return items.map(([l, v]) => `<div class="cal-stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("");
 }
 
-function calendarHTML(s, mode) {
+function calendarHTML(s) {
   const by = s.by_day;
   const w = s.wrapped;
   if (!w.date_from) return "";
@@ -592,12 +586,11 @@ function calendarHTML(s, mode) {
   const d0 = new Date(start);
   d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7)); // back up to Monday
 
-  const metric = (rec) => (rec ? (mode === "cost" ? rec.cost : rec.messages) : 0);
+  const metric = (rec) => (rec ? rec.cost : 0);
   let max = 0;
   for (const k in by) max = Math.max(max, metric(by[k]));
   const empty = cssVar("--cal-empty");
-  const prefix = mode === "cost" ? "--heat-cost-" : "--heat-msg-";
-  const scale = [empty, cssVar(prefix + "1"), cssVar(prefix + "2"), cssVar(prefix + "3"), cssVar(prefix + "4")];
+  const scale = [empty, cssVar("--heat-cost-1"), cssVar("--heat-cost-2"), cssVar("--heat-cost-3"), cssVar("--heat-cost-4")];
   const shade = (v) => {
     if (!v) return scale[0];                  // in-range, no activity — muted but visible
     const r = v / (max || 1);
@@ -607,9 +600,10 @@ function calendarHTML(s, mode) {
     return scale[4];
   };
 
-  let cells = "", months = "", prevMonth = -1;
+  let cells = "", months = "", prevMonth = -1, weeks = 0;
   const cur = new Date(d0);
   while (cur <= end) {
+    weeks++;
     const colMonth = cur.getMonth();
     months += colMonth !== prevMonth ? `<span>${MON[colMonth]}</span>` : "<span></span>";
     prevMonth = colMonth;
@@ -626,7 +620,7 @@ function calendarHTML(s, mode) {
     }
   }
   const weekdays = ["Mon", "", "Wed", "", "Fri", "", "Sun"].map((d) => `<span>${d}</span>`).join("");
-  return `<div class="cal">
+  return `<div class="cal" style="--cal-weeks:${weeks}">
     <div class="cal-corner"></div>
     <div class="cal-months">${months}</div>
     <div class="cal-weekdays">${weekdays}</div>
