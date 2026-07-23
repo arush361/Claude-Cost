@@ -1,10 +1,10 @@
-# Claude-Cost 🧾
+# ClaudeLens 🧾
 
 > **Runs 100% locally.** It reads your `~/.claude` logs on your own machine, serves the dashboard from a tiny local Python server, and never sends your data anywhere. No cloud, no telemetry, no API key.
 
 Ever wonder where all your Claude Code tokens *actually* go? Same.
 
-Claude-Cost is a local-first dashboard that reads your `~/.claude` session logs and turns them into cost estimates, pretty charts, a shareable "Claude Wrapped" card, and blunt advice on how to stop lighting money on fire.
+ClaudeLens is a local-first dashboard that reads your `~/.claude` session logs and turns them into cost estimates, pretty charts, a shareable "Claude Wrapped" card, and blunt advice on how to stop lighting money on fire.
 
 No cloud. No telemetry. No API key. No `npm install` sadness. Just Python's standard library and your own data, staying on your own machine.
 
@@ -13,8 +13,8 @@ No cloud. No telemetry. No API key. No `npm install` sadness. Just Python's stan
 ## Quick start
 
 ```bash
-git clone https://github.com/arush361/Claude-Cost.git
-cd Claude-Cost
+git clone https://github.com/arush361/ClaudeLens.git
+cd ClaudeLens
 python3 app.py
 ```
 
@@ -30,17 +30,15 @@ Hit **↻ Refresh** in the top-right after some Claude Code activity to re-parse
 
 ## What's inside
 
-- **✦ Wrapped** — your Spotify-Wrapped-but-for-tokens. Headline stats, fun analogies ("Claude wrote ~59 novels of text"), a GitHub-style activity calendar, and a **Records & superlatives** grid (priciest day, marathon session, biggest single message, model of choice...). Smash the **Download card** button to export it as a PNG and flex on your timeline.
-- **Overview** — spend, sessions, messages, tokens, daily trend, and a real weekday × hour activity heatmap.
+- **✦ Wrapped** — your Spotify-Wrapped-but-for-tokens. Headline stats, fun analogies ("Claude wrote ~59 novels of text"), a GitHub-style activity calendar (messages and cost side by side), and a **Records & superlatives** grid (priciest day, marathon session, biggest single message, model of choice...). Smash the **Download card** button to export it as a PNG and flex on your timeline.
 - **Usage** — cost + sessions in one place, with **filters**: pick a project and/or a timeframe (Last 7d / 30d / 90d or a custom date range) and every chart, the model breakdown, and the session list all update together. Filtering is done server-side so the numbers stay correct, not just the visible rows. Click any session for a full turn-by-turn replay with per-turn cost and context-compaction markers.
-- **Activity** — where your tokens actually go: most-used tools, a **file hotspots** table, skills, and subagents, plus an *approximate* "context injected" meter (how many bytes each tool fed back into the conversation — a proxy for tokens, honestly labeled, not a fake per-tool bill).
+- **Activity** — where your tokens actually go: most-used tools, a **file hotspots** table, skills, subagents, a **top costing sessions** breakdown (per-session cost split across input/output/cache read/cache write, so you can see exactly why a session got expensive), plus an *approximate* "context injected" meter (how many bytes each tool fed back into the conversation — a proxy for tokens, honestly labeled, not a fake per-tool bill).
 - **Projects** — spend grouped by the actual working directory.
 - **Insights** — an efficiency grade plus ranked, quantified ways to cut cost (route Opus work to Sonnet, fix cache misses, trim bloated context...). Savings are labeled separately from "where to look" signals, because those two are not the same number.
 
 ![Usage](screenshots/usage.png)
 ![Activity](screenshots/activity.png)
 ![Insights](screenshots/insights.png)
-![Overview](screenshots/overview.png)
 ![Projects](screenshots/projects.png)
 
 ## About the numbers
@@ -55,7 +53,7 @@ Want to tweak rates or add a model? It's all in `pricing.py`. Because the wareho
 
 ## History that outlives the logs
 
-Claude Code prunes its own `~/.claude` session logs after about 30 days. Claude-Cost keeps a tiny local **warehouse** at `~/.claude-cost/history.db` (a SQLite file) so your spend history sticks around after the raw logs disappear.
+Claude Code prunes its own `~/.claude` session logs after about 30 days. ClaudeLens keeps a tiny local **warehouse** at `~/.claude-cost/history.db` (a SQLite file) so your spend history sticks around after the raw logs disappear.
 
 - **Persistent** — each message is ingested once, keyed on its stable id. When a log file gets pruned, its rows stay in the warehouse. Your all-time totals don't quietly shrink.
 - **Incremental** — only session files whose size/mtime changed get re-parsed, so after the first run the dashboard loads in a fraction of a second (a fresh process warm-starts in ~0.5s) instead of re-reading hundreds of MB every time.

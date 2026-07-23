@@ -3,8 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Claude Usage Dashboard</title>
+  <title>ClaudeLens</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script>
+    (function () {
+      var t = localStorage.getItem("theme");
+      if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+    })();
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
@@ -12,17 +18,17 @@
   <header>
     <div class="brand">
       <span class="dot"></span>
-      <h1>Claude Usage</h1>
+      <h1>ClaudeLens</h1>
     </div>
     <nav id="tabs">
       <button data-tab="wrapped" class="active">✦ Wrapped</button>
-      <button data-tab="overview">Overview</button>
       <button data-tab="usage">Usage</button>
       <button data-tab="activity">Activity</button>
       <button data-tab="projects">Projects</button>
       <button data-tab="insights">Insights</button>
     </nav>
     <div class="meta">
+      <button id="theme-btn" class="theme-btn" title="Toggle light/dark mode">🌙</button>
       <button id="refresh-btn" class="refresh-btn" title="Re-parse ~/.claude and reload">↻ Refresh</button>
       <span id="generated"></span>
     </div>
@@ -35,7 +41,6 @@
     </div>
 
     <section id="wrapped" class="tab"></section>
-    <section id="overview" class="tab hidden"></section>
     <section id="usage" class="tab hidden"></section>
     <section id="activity" class="tab hidden"></section>
     <section id="projects" class="tab hidden"></section>

@@ -1,4 +1,4 @@
-/* Claude Usage Dashboard — frontend */
+/* ClaudeLens — frontend */
 
 const MODEL_COLORS = {
   "claude-opus-4-8": "#d97757",
@@ -40,9 +40,27 @@ const dateLabel = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { mont
 const shortProj = (p) => (p || "").replace(/^\/Users\/[^/]+\//, "~/") || "(unknown)";
 const modelColor = (m, i) => MODEL_COLORS[m] || FALLBACK_COLORS[i % FALLBACK_COLORS.length];
 
+/* ---------- theme ---------- */
+function wireTheme() {
+  const btn = document.getElementById("theme-btn");
+  const apply = (light) => {
+    if (light) document.documentElement.setAttribute("data-theme", "light");
+    else document.documentElement.removeAttribute("data-theme");
+    btn.textContent = light ? "☀️" : "🌙";
+    if (STATE.summary) renderAll(STATE.summary);
+  };
+  btn.onclick = () => {
+    const light = document.documentElement.getAttribute("data-theme") !== "light";
+    localStorage.setItem("theme", light ? "light" : "dark");
+    apply(light);
+  };
+  btn.textContent = document.documentElement.getAttribute("data-theme") === "light" ? "☀️" : "🌙";
+}
+
 /* ---------- boot ---------- */
 async function boot() {
   wireTabs();
+  wireTheme();
   document.getElementById("drawer-close").onclick = closeDrawer;
   document.getElementById("drawer").onclick = (e) => { if (e.target.id === "drawer") closeDrawer(); };
   try {
@@ -61,9 +79,8 @@ async function boot() {
 function renderAll(s) {
   document.getElementById("generated").textContent = "updated " + dateLabel(s.generated_at);
   renderWrapped(s);
-  renderOverview(s);
   renderUsage();
-  renderActivity();
+  renderActivity(s);
   renderProjects(s);
   renderInsights(s);
 }
@@ -102,92 +119,6 @@ function wireTabs() {
       document.getElementById(b.dataset.tab).classList.remove("hidden");
     };
   });
-}
-
-/* ---------- OVERVIEW ---------- */
-function renderOverview(s) {
-  const t = s.totals;
-  const el = document.getElementById("overview");
-  el.innerHTML = `
-    <div class="cards">
-      ${card("Total cost", usd(t.cost), "estimated")}
-      ${card("Sessions", num(t.sessions), num(t.projects) + " projects")}
-      ${card("Messages", num(t.messages), "assistant turns")}
-      ${card("Total tokens", tok(t.total_tokens), "all buckets")}
-      ${card("Cache reads", tok(t.cache_read_tokens), "billed at 0.1×")}
-      ${card("Output tokens", tok(t.output_tokens), "billed at 5×")}
-    </div>
-    <div class="panel">
-      <h2>Daily cost <span class="hint">local time</span></h2>
-      <div class="chart-wrap"><canvas id="ov-daily"></canvas></div>
-    </div>
-    <div class="grid-2">
-      <div class="panel">
-        <h2>Token breakdown</h2>
-        <div class="chart-wrap"><canvas id="ov-tokens"></canvas></div>
-      </div>
-      <div class="panel">
-        <h2>Activity by hour <span class="hint">local time</span></h2>
-        <div class="chart-wrap"><canvas id="ov-hour"></canvas></div>
-      </div>
-    </div>
-    <div class="panel">
-      <h2>Activity heatmap <span class="hint">messages · weekday × hour, local</span></h2>
-      <div id="heatmap"></div>
-      <div class="legend"><span>less <span class="swatch" style="background:#1e232c"></span><span class="swatch" style="background:#3a4a5a"></span><span class="swatch" style="background:#4d7ba0"></span><span class="swatch" style="background:#6ea8fe"></span> more</span></div>
-    </div>`;
-
-  const days = Object.keys(s.by_day);
-  lineChart("ov-daily", days, [{
-    label: "Cost", data: days.map((d) => s.by_day[d].cost),
-    color: "#d97757", fill: true,
-  }], { yFmt: usd });
-
-  const tb = [
-    ["Input", t.input_tokens, "#d97757"],
-    ["Output", t.output_tokens, "#e5716a"],
-    ["Cache read", t.cache_read_tokens, "#4ec9a5"],
-    ["Cache write", t.cache_write_tokens, "#6ea8fe"],
-  ];
-  doughnut("ov-tokens", tb.map((r) => r[0]), tb.map((r) => r[1]), tb.map((r) => r[2]), tok);
-
-  const hours = [...Array(24).keys()];
-  barChart("ov-hour", hours.map((h) => h + ":00"),
-    [{ label: "Messages", data: hours.map((h) => s.by_hour[h].messages), color: "#6ea8fe" }]);
-
-  renderHeatmap(s);
-}
-
-function renderHeatmap(s) {
-  // Build weekday(0-6 Mon..Sun) × hour matrix from by_weekday+by_hour is not
-  // enough (they're marginal). We rebuild from sessions? Not available. Use
-  // hour marginal duplicated across weekday marginal proportionally is wrong —
-  // instead show weekday totals as rows scaled by hour marginal shape.
-  // Simpler + honest: show the weekday×hour matrix from server if present,
-  // else fall back to hour-only single row.
-  const wk = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const m = (s.weekhour && s.weekhour.messages) || [];
-  let cellMax = 0;
-  for (const row of m) for (const v of row) cellMax = Math.max(cellMax, v);
-  const shade = (v) => {
-    const r = cellMax ? v / cellMax : 0;
-    if (r === 0) return "#161b22";
-    if (r < 0.25) return "#2f4155";
-    if (r < 0.5) return "#3f6a95";
-    if (r < 0.75) return "#5591d6";
-    return "#6ea8fe";
-  };
-  let html = '<div class="heat"><div class="rowlabel"></div>';
-  for (let h = 0; h < 24; h++) html += `<div class="collabel">${h % 3 === 0 ? h : ""}</div>`;
-  for (let d = 0; d < 7; d++) {
-    html += `<div class="rowlabel">${wk[d]}</div>`;
-    for (let h = 0; h < 24; h++) {
-      const v = (m[d] && m[d][h]) || 0;
-      html += `<div class="cell" style="background:${shade(v)}" title="${wk[d]} ${h}:00 · ${v} msgs"></div>`;
-    }
-  }
-  html += "</div>";
-  document.getElementById("heatmap").innerHTML = html;
 }
 
 /* ---------- USAGE (Cost + Sessions, filterable) ---------- */
@@ -344,7 +275,7 @@ function drawUsageSessions() {
 /* ---------- ACTIVITY (tool / file / skill / subagent attribution) ---------- */
 const ACTIVITY = { data: null };
 
-async function renderActivity() {
+async function renderActivity(s) {
   const el = document.getElementById("activity");
   if (!ACTIVITY.data) {
     el.innerHTML = `<p class="muted" style="padding:12px 2px">Loading activity…</p>`;
@@ -358,10 +289,10 @@ async function renderActivity() {
       return;
     }
   }
-  drawActivity(ACTIVITY.data);
+  drawActivity(ACTIVITY.data, s);
 }
 
-function drawActivity(d) {
+function drawActivity(d, s) {
   const el = document.getElementById("activity");
   const tools = d.tool || [], files = d.file || [], skills = d.skill || [], subs = d.subagent || [];
   const totalCalls = tools.reduce((a, t) => a + t.calls, 0);
@@ -398,6 +329,14 @@ function drawActivity(d) {
       </table></div>
     </div>
 
+    <div class="panel">
+      <h2>Top costing sessions <span class="hint">ranked by cost · click a row to open the full replay</span></h2>
+      <div class="scroll" style="max-height:420px"><table>
+        <thead><tr><th>Session</th><th class="num">Cost</th><th class="num">Msgs</th><th class="num">Tokens</th><th>Why it cost this much</th></tr></thead>
+        <tbody>${topSessionsHTML(s)}</tbody>
+      </table></div>
+    </div>
+
     <div class="grid-2">
       <div class="panel">
         <h2>Skills <span class="hint">invocations</span></h2>
@@ -422,6 +361,58 @@ function drawActivity(d) {
 
   const topBytes = [...tools].sort((a, b) => b.result_bytes - a.result_bytes).slice(0, 15);
   barChart("ac-bytes", topBytes.map((t) => t.key), [{ label: "Bytes", data: topBytes.map((t) => t.result_bytes), color: "#d97757" }], { horizontal: true, yFmt: bytes });
+
+  el.querySelectorAll("#activity tr.clickable").forEach((tr) => { tr.onclick = () => openSession(tr.dataset.id); });
+}
+
+function topSessionsHTML(s) {
+  const sessions = (s && s.sessions) || [];
+  const top = [...sessions].sort((a, b) => b.cost - a.cost).slice(0, 10);
+  if (!top.length) return `<tr><td colspan="5" class="muted">No sessions recorded.</td></tr>`;
+  return top.map((sess) => `
+    <tr class="clickable" data-id="${esc(sess.session_id)}">
+      <td><div class="proj-name">${esc(shortProj(sess.project))}</div><span class="mono muted">${esc(sess.session_id.slice(0, 8))}</span></td>
+      <td class="num">${usd(sess.cost)}</td>
+      <td class="num">${num(sess.assistant_messages)}</td>
+      <td class="num">${tok(sess.total_tokens)}</td>
+      <td>${tokenSplitHTML(sess)}${sessionWhy(sess).map((w) => `<span class="pill">${esc(w)}</span>`).join(" ")}</td>
+    </tr>`).join("");
+}
+
+function tokenSplitHTML(sess) {
+  const parts = [
+    ["input", sess.cost_input, "#6ea8fe"],
+    ["output", sess.cost_output, "#e5716a"],
+    ["cache read", sess.cost_cache_read, "#4ec9a5"],
+    ["cache write", sess.cost_cache_write, "#e6b450"],
+  ];
+  const total = parts.reduce((a, [, v]) => a + v, 0) || 1;
+  const bar = parts.filter(([, v]) => v > 0)
+    .map(([l, v, c]) => `<span style="background:${c};width:${(v / total * 100).toFixed(1)}%" title="${l}: ${usd(v)} (${Math.round(v / total * 100)}% of cost)"></span>`)
+    .join("");
+  const dominant = parts.reduce((a, b) => (b[1] > a[1] ? b : a));
+  return `<div class="tsplit"><div class="tsplit-bar">${bar}</div><span class="tsplit-label">${esc(dominant[0])} ${Math.round(dominant[1] / total * 100)}% of cost</span></div>`;
+}
+
+function sessionWhy(sess) {
+  const reasons = [];
+  const cacheBase = sess.cache_read_tokens + sess.cache_write_tokens + sess.input_tokens;
+  const hitRate = cacheBase ? sess.cache_read_tokens / cacheBase : 0;
+  if (cacheBase > 50_000 && hitRate < 0.5) reasons.push(`low cache hit (${Math.round(hitRate * 100)}%)`);
+
+  const opusHeavy = (sess.models || []).some((m) => (m || "").toLowerCase().includes("opus"));
+  if (opusHeavy && sess.cost > 1) reasons.push("Opus");
+
+  if (sess.cache_write_tokens > 50_000 && sess.cache_read_tokens < 0.15 * (sess.cache_write_tokens + 1)) {
+    reasons.push("cache write, barely reused");
+  }
+
+  if (sess.cost > 0 && sess.cost_output / sess.cost > 0.35) reasons.push("output-heavy");
+
+  const perMsgContext = sess.cache_read_tokens / (sess.assistant_messages || 1);
+  if (sess.assistant_messages >= 20 && perMsgContext > 150_000) reasons.push("large context re-sent each turn");
+
+  return reasons;
 }
 
 /* ---------- PROJECTS ---------- */
@@ -461,7 +452,11 @@ function renderInsights(s) {
   const el = document.getElementById("insights");
   const d = s.insights || {};
   const items = d.items || [];
-  const gradeColor = { A: "#4ec9a5", B: "#6ea8fe", C: "#e6b450", D: "#e5716a" }[d.grade] || "#8b96a5";
+  const isLight = document.documentElement.getAttribute("data-theme") === "light";
+  const gradeColors = isLight
+    ? { A: "#1f9d78", B: "#2f6fd6", C: "#b8860f", D: "#d1453a" }
+    : { A: "#4ec9a5", B: "#6ea8fe", C: "#e6b450", D: "#e5716a" };
+  const gradeColor = gradeColors[d.grade] || cssVar("--muted");
   const groups = [
     ["savings", "💡 Opportunities to cut cost", "money you could actually save"],
     ["signal", "🎯 Where to focus", "concentration & where-to-look — not additive savings"],
@@ -485,7 +480,7 @@ function renderInsights(s) {
       const g = items.filter((i) => i.kind === kind);
       if (!g.length) return "";
       return `<div class="ins-group">
-        <div class="ins-group-h">${label}${sub ? ` <span class="hint">${sub}</span>` : ""}</div>
+        <div class="ins-group-h">${label} <span class="ins-group-count">${g.length}</span>${sub ? ` <span class="hint">${sub}</span>` : ""}</div>
         ${g.map(insCard).join("")}
       </div>`;
     }).join("")}`;
@@ -498,7 +493,7 @@ function insCard(i) {
   return `<div class="insight ${i.severity}">
     <div class="ins-icon">${i.icon || "•"}</div>
     <div class="ins-body">
-      <div class="ihead"><span class="sev ${i.severity}">${i.severity === "good" ? "✓ good" : i.severity}</span><h3>${esc(i.title)}</h3></div>
+      <div class="ihead"><span class="sev ${i.severity}">${i.severity === "good" ? "good" : i.severity}</span><h3>${esc(i.title)}</h3></div>
       <p>${esc(i.detail)}</p>
     </div>
     ${i.impact ? `<div class="impact ${big ? "big" : ""}">${big ? "↓ " : ""}${esc(i.impact)}</div>` : ""}
@@ -534,14 +529,26 @@ function renderWrapped(s) {
         <div class="analogy">📚 processed <b>~${Math.round(wp)}×</b> War &amp; Peace</div>
         <div class="analogy">🕐 peak <b>${fmtHour(w.peak_hour)}</b> · ${esc(w.peak_weekday)}s</div>
         <div class="analogy">🦉 <b>${Math.round(w.night_owl_pct * 100)}%</b> after 10pm</div>
-        <div class="analogy">🔥 <b>${w.longest_streak}-day</b> streak</div>
       </div>
     </div>
 
     <div class="panel">
-      <h2>Your days in Claude <span class="hint">daily message volume, local time · through today</span></h2>
-      <div class="calendar-wrap">${calendarHTML(s)}</div>
-      <div class="cal-legend">less <span class="c" style="background:#1b212b"></span><span class="c" style="background:#2f6f57"></span><span class="c" style="background:#3f9a72"></span><span class="c" style="background:#57c99a"></span><span class="c" style="background:#8fe9c4"></span> more</div>
+      <div class="cal-head">
+        <h2>Your days in Claude <span class="hint">local time · through today</span></h2>
+      </div>
+      <div class="cal-stats">${calStatsHTML(s)}</div>
+      <div class="cal-pair">
+        <div class="cal-col">
+          <div class="cal-col-h">Messages</div>
+          <div class="calendar-wrap">${calendarHTML(s, "messages")}</div>
+          <div class="cal-legend">less <span class="c"></span><span class="c" style="background:var(--heat-msg-1)"></span><span class="c" style="background:var(--heat-msg-2)"></span><span class="c" style="background:var(--heat-msg-3)"></span><span class="c" style="background:var(--heat-msg-4)"></span> more</div>
+        </div>
+        <div class="cal-col">
+          <div class="cal-col-h">Cost</div>
+          <div class="calendar-wrap">${calendarHTML(s, "cost")}</div>
+          <div class="cal-legend">less <span class="c"></span><span class="c" style="background:var(--heat-cost-1)"></span><span class="c" style="background:var(--heat-cost-2)"></span><span class="c" style="background:var(--heat-cost-3)"></span><span class="c" style="background:var(--heat-cost-4)"></span> more</div>
+        </div>
+      </div>
     </div>
 
     <div class="panel">
@@ -553,11 +560,28 @@ function renderWrapped(s) {
   document.getElementById("share-btn").onclick = exportCard;
 }
 
-function calendarHTML(s) {
+function calStatsHTML(s) {
+  const w = s.wrapped;
+  const by = s.by_day;
+  const days = Object.values(by);
+  const activeDays = days.length;
+  const totalCost = days.reduce((a, d) => a + d.cost, 0);
+  const avgPerActive = totalCost / (activeDays || 1);
+  const items = [
+    ["Active days", num(activeDays)],
+    ["Avg / active day", usd(avgPerActive)],
+    ["Current streak", `${w.current_streak} ${w.current_streak === 1 ? "day" : "days"}`],
+    ["Best streak", `${w.longest_streak} ${w.longest_streak === 1 ? "day" : "days"}`],
+  ];
+  return items.map(([l, v]) => `<div class="cal-stat"><div class="v">${esc(v)}</div><div class="l">${esc(l)}</div></div>`).join("");
+}
+
+function calendarHTML(s, mode) {
   const by = s.by_day;
   const w = s.wrapped;
   if (!w.date_from) return "";
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const start = new Date(w.date_from + "T00:00:00");
   // Range always runs through TODAY (local), padding trailing days so the gap
@@ -568,15 +592,19 @@ function calendarHTML(s) {
   const d0 = new Date(start);
   d0.setDate(d0.getDate() - ((d0.getDay() + 6) % 7)); // back up to Monday
 
+  const metric = (rec) => (rec ? (mode === "cost" ? rec.cost : rec.messages) : 0);
   let max = 0;
-  for (const k in by) max = Math.max(max, by[k].messages);
+  for (const k in by) max = Math.max(max, metric(by[k]));
+  const empty = cssVar("--cal-empty");
+  const prefix = mode === "cost" ? "--heat-cost-" : "--heat-msg-";
+  const scale = [empty, cssVar(prefix + "1"), cssVar(prefix + "2"), cssVar(prefix + "3"), cssVar(prefix + "4")];
   const shade = (v) => {
-    if (!v) return "#1b212b";                 // in-range, no activity — muted but visible
+    if (!v) return scale[0];                  // in-range, no activity — muted but visible
     const r = v / (max || 1);
-    if (r < 0.25) return "#2f6f57";
-    if (r < 0.5) return "#3f9a72";
-    if (r < 0.75) return "#57c99a";
-    return "#8fe9c4";
+    if (r < 0.25) return scale[1];
+    if (r < 0.5) return scale[2];
+    if (r < 0.75) return scale[3];
+    return scale[4];
   };
 
   let cells = "", months = "", prevMonth = -1;
@@ -588,9 +616,11 @@ function calendarHTML(s) {
     for (let i = 0; i < 7; i++) {
       const inRange = cur >= start && cur <= end;
       const rec = by[ymd(cur)];
-      const msgs = rec ? rec.messages : 0;
-      const bg = inRange ? shade(msgs) : "transparent";
-      const title = inRange ? `${ymd(cur)} · ${msgs} msgs · ${rec ? usd(rec.cost) : "$0"}` : "";
+      const v = metric(rec);
+      const bg = inRange ? shade(v) : "transparent";
+      const title = inRange
+        ? `${DOW[cur.getDay()]}, ${ymd(cur)} · ${rec ? rec.messages : 0} msgs · ${rec ? usd(rec.cost) : "$0"}`
+        : "";
       cells += `<div class="c" style="background:${bg}" title="${title}"></div>`;
       cur.setDate(cur.getDate() + 1);
     }
@@ -713,13 +743,17 @@ function card(label, value, sub) {
   return `<div class="card"><div class="label">${esc(label)}</div><div class="value">${esc(value)}</div><div class="sub">${esc(sub || "")}</div></div>`;
 }
 
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
 function baseOpts(extra = {}) {
+  const grid = cssVar("--border");
+  const tick = cssVar("--muted");
   return Object.assign({
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false }, tooltip: { enabled: true } },
     scales: {
-      x: { grid: { color: "#232935" }, ticks: { color: "#8b96a5", maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-      y: { grid: { color: "#232935" }, ticks: { color: "#8b96a5" }, beginAtZero: true },
+      x: { grid: { color: grid }, ticks: { color: tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+      y: { grid: { color: grid }, ticks: { color: tick }, beginAtZero: true },
     },
   }, extra);
 }
@@ -756,11 +790,11 @@ function doughnut(id, labels, data, colors, fmt) {
   destroy(id);
   charts[id] = new Chart(document.getElementById(id), {
     type: "doughnut",
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#171b22", borderWidth: 2 }] },
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: cssVar("--panel"), borderWidth: 2 }] },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: "62%",
       plugins: {
-        legend: { position: "right", labels: { color: "#e6e9ee", boxWidth: 12, font: { size: 11 } } },
+        legend: { position: "right", labels: { color: cssVar("--text"), boxWidth: 12, font: { size: 11 } } },
         tooltip: { callbacks: { label: (c) => `${c.label}: ${fmt ? fmt(c.raw) : c.raw}` } },
       },
     },

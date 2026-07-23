@@ -156,13 +156,14 @@ def cost_from_buckets(model, inp, out, cread, w5m, w1h, on_date=None):
         in_rate, out_rate = rates_for(model, on_date)
         in_rate /= 1e6
         out_rate /= 1e6
-        cost = (
-            inp * in_rate
-            + out * out_rate
-            + cread * in_rate * CACHE_READ_MULT
-            + w5m * in_rate * CACHE_WRITE_5M_MULT
+        cost_input = inp * in_rate
+        cost_output = out * out_rate
+        cost_cache_read = cread * in_rate * CACHE_READ_MULT
+        cost_cache_write = (
+            w5m * in_rate * CACHE_WRITE_5M_MULT
             + w1h * in_rate * CACHE_WRITE_1H_MULT
         )
+        cost = cost_input + cost_output + cost_cache_read + cost_cache_write
         # Net savings from prompt caching vs. a no-cache world where every
         # cache-read token would have been billed as fresh input (1.0x) and
         # cache writes carried no premium:
@@ -176,11 +177,16 @@ def cost_from_buckets(model, inp, out, cread, w5m, w1h, on_date=None):
     else:
         cost = 0.0
         cache_saving = 0.0
+        cost_input = cost_output = cost_cache_read = cost_cache_write = 0.0
 
     return {
         "priced": priced,
         "cost": cost,
         "cache_saving": cache_saving,
+        "cost_input": cost_input,
+        "cost_output": cost_output,
+        "cost_cache_read": cost_cache_read,
+        "cost_cache_write": cost_cache_write,
         "input_tokens": inp,
         "output_tokens": out,
         "cache_read_tokens": cread,

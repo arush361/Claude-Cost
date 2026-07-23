@@ -1,4 +1,4 @@
-"""Zero-dependency server for the Claude usage dashboard.
+"""Zero-dependency server for ClaudeLens.
 
 Local-first: reads ~/.claude/projects, computes cost/usage aggregates, and
 serves them as JSON to a single-page frontend. No cloud, no telemetry, and no
@@ -111,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Claude usage dashboard")
+    ap = argparse.ArgumentParser(description="ClaudeLens")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=5000)
     ap.add_argument("--db", default=None,
@@ -121,7 +121,7 @@ def main():
     if args.db:
         history.set_db_path(args.db)
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"Claude usage dashboard -> http://{args.host}:{args.port}  (Ctrl+C to stop)")
+    print(f"ClaudeLens -> http://{args.host}:{args.port}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

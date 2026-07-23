@@ -73,6 +73,10 @@ def _blank_bucket():
     return {
         "cost": 0.0,
         "cache_saving": 0.0,
+        "cost_input": 0.0,
+        "cost_output": 0.0,
+        "cost_cache_read": 0.0,
+        "cost_cache_write": 0.0,
         "messages": 0,
         "input_tokens": 0,
         "output_tokens": 0,
@@ -87,6 +91,10 @@ def _blank_bucket():
 def _add(bucket, bd):
     bucket["cost"] += bd["cost"]
     bucket["cache_saving"] += bd.get("cache_saving", 0.0)
+    bucket["cost_input"] += bd.get("cost_input", 0.0)
+    bucket["cost_output"] += bd.get("cost_output", 0.0)
+    bucket["cost_cache_read"] += bd.get("cost_cache_read", 0.0)
+    bucket["cost_cache_write"] += bd.get("cost_cache_write", 0.0)
     bucket["messages"] += 1
     for k in (
         "input_tokens",
@@ -328,6 +336,10 @@ def _serialize_session(s):
         "user_prompts": s["user_prompts"],
         "compactions": s["compactions"],
         "cost": s["cost"],
+        "cost_input": s["cost_input"],
+        "cost_output": s["cost_output"],
+        "cost_cache_read": s["cost_cache_read"],
+        "cost_cache_write": s["cost_cache_write"],
         "input_tokens": s["input_tokens"],
         "output_tokens": s["output_tokens"],
         "cache_read_tokens": s["cache_read_tokens"],
